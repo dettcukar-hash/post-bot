@@ -146,7 +146,7 @@ async def transcribe_voice(file_id: str, context: ContextTypes.DEFAULT_TYPE) -> 
 async def generate_post(transcript: str) -> str:
     """Генерирует первый черновик поста."""
     response = await client.chat.completions.create(
-        model="gpt-4o-mini",
+        model="gpt-4o",
         messages=[
             {"role": "system", "content": SYSTEM_PROMPT},
             {"role": "user", "content": f"Основная мысль автора:\n{transcript}"},
@@ -166,7 +166,7 @@ async def revise_post(current_post: str, edit_instruction: str) -> str:
         f"Не переписывай с нуля — улучши именно этот текст, сохраняя то, что уже хорошо."
     )
     response = await client.chat.completions.create(
-        model="gpt-4o-mini",
+        model="gpt-4o",
         messages=[
             {"role": "system", "content": SYSTEM_PROMPT},
             {"role": "user", "content": user_content},
