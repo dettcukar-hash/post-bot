@@ -110,11 +110,10 @@ def review_keyboard() -> InlineKeyboardMarkup:
 
 async def send_draft(message, post: str, is_edit: bool = False) -> None:
     """Отправляет черновик поста с кнопками."""
-    label = "🔄 *Новая версия:*" if is_edit else "📝 *Черновик поста:*"
+    label = "🔄 Новая версия:" if is_edit else "📝 Черновик поста:"
     await message.reply_text(
         f"{label}\n\n{post}",
         reply_markup=review_keyboard(),
-        parse_mode="Markdown",
     )
 
 
@@ -147,7 +146,7 @@ async def handle_initial_voice(update: Update, context: ContextTypes.DEFAULT_TYP
     context.user_data["transcript"] = transcript
     context.user_data["edits"] = []
 
-    await status_msg.edit_text(f"🎙 *Распознано:* _{transcript}_\n\n✍️ Генерирую пост...", parse_mode="Markdown")
+    await status_msg.edit_text(f"🎙 Распознано: {transcript}\n\n✍️ Генерирую пост...")
 
     try:
         post = await generate_post(transcript, [])
@@ -190,13 +189,8 @@ async def handle_review_callback(update: Update, context: ContextTypes.DEFAULT_T
 
     if query.data == "done":
         post = context.user_data.get("current_post", "")
-        # Убираем кнопки с черновика
         await query.edit_message_reply_markup(None)
-        # Финальный пост — крупным блоком для удобного копирования
-        await query.message.reply_text(
-            f"✅ *Финальный пост:*\n\n{post}",
-            parse_mode="Markdown",
-        )
+        await query.message.reply_text(f"✅ Финальный пост:\n\n{post}")
         context.user_data.clear()
         return ConversationHandler.END
 
@@ -221,7 +215,7 @@ async def handle_edit_voice(update: Update, context: ContextTypes.DEFAULT_TYPE) 
         await status_msg.edit_text(f"❌ Ошибка транскрипции: {e}")
         return EDITING
 
-    await status_msg.edit_text(f"🎙 *Правки:* _{edit_text}_\n\n✍️ Генерирую новую версию...", parse_mode="Markdown")
+    await status_msg.edit_text(f"🎙 Правки: {edit_text}\n\n✍️ Генерирую новую версию...")
     return await _apply_edit(update, context, status_msg, edit_text)
 
 
