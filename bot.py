@@ -143,14 +143,28 @@ async def transcribe_voice(file_id: str, context: ContextTypes.DEFAULT_TYPE) -> 
         os.unlink(tmp_path)
 
 
-async def generate_post(transcript: str, edits: list[str]) -> str:
-    """Генерирует пост через GPT-4o-mini с учётом правок."""
-    user_content = f"Основная мысль автора:\n{transcript}"
+async def generate_post(transcript: str) -> str:
+    """Генерирует первый черновик поста."""
+    response = await client.chat.completions.create(
+        model="gpt-4o-mini",
+        messages=[
+            {"role": "system", "content": SYSTEM_PROMPT},
+            {"role": "user", "content": f"Основная мысль автора:\n{transcript}"},
+        ],
+        temperature=0.7,
+        max_tokens=1500,
+    )
+    return response.choices[0].message.content.strip()
 
-    if edits:
-        formatted_edits = "\n".join(f"- {e}" for e in edits)
-        user_content += f"\n\nПравки автора (применить к новой версии):\n{formatted_edits}"
 
+async def revise_post(current_post: str, edit_instruction: str) -> str:
+    """Редактирует существующий черновик согласно правкам автора."""
+    user_content = (
+        f"Вот текущий черновик поста:\n\n{current_post}\n\n"
+        f"Правка автора: {edit_instruction}\n\n"
+        f"Отредактируй черновик согласно правке. "
+        f"Не переписывай с нуля — улучши именно этот текст, сохраняя то, что уже хорошо."
+    )
     response = await client.chat.completions.create(
         model="gpt-4o-mini",
         messages=[
@@ -206,12 +220,10 @@ async def handle_initial_voice(update: Update, context: ContextTypes.DEFAULT_TYP
         return WAITING_INPUT
 
     context.user_data["transcript"] = transcript
-    context.user_data["edits"] = []
-
     await status_msg.edit_text(f"🎙 Распознано: {transcript}\n\n✍️ Генерирую пост...")
 
     try:
-        post = await generate_post(transcript, [])
+        post = await generate_post(transcript)
     except Exception as e:
         logger.error("Generation error: %s", e)
         await status_msg.edit_text(f"❌ Ошибка генерации: {e}\nПопробуй ещё раз.")
@@ -227,12 +239,10 @@ async def handle_initial_voice(update: Update, context: ContextTypes.DEFAULT_TYP
 async def handle_initial_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     transcript = update.message.text
     context.user_data["transcript"] = transcript
-    context.user_data["edits"] = []
-
     status_msg = await update.message.reply_text("✍️ Генерирую пост...")
 
     try:
-        post = await generate_post(transcript, [])
+        post = await generate_post(transcript)
     except Exception as e:
         logger.error("Generation error: %s", e)
         await status_msg.edit_text(f"❌ Ошибка генерации: {e}\nПопробуй ещё раз.")
@@ -277,7 +287,7 @@ async def handle_edit_voice(update: Update, context: ContextTypes.DEFAULT_TYPE) 
         await status_msg.edit_text(f"❌ Ошибка транскрипции: {e}")
         return EDITING
 
-    await status_msg.edit_text(f"🎙 Правки: {edit_text}\n\n✍️ Генерирую новую версию...")
+    await status_msg.edit_text(f"🎙 Правки: {edit_text}\n\n✍️ Применяю...")
     return await _apply_edit(update, context, status_msg, edit_text)
 
 
@@ -288,16 +298,13 @@ async def handle_edit_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -
 
 
 async def _apply_edit(update: Update, context: ContextTypes.DEFAULT_TYPE, status_msg, edit_text: str) -> int:
-    context.user_data.setdefault("edits", []).append(edit_text)
+    current_post = context.user_data.get("current_post", "")
 
     try:
-        post = await generate_post(
-            context.user_data["transcript"],
-            context.user_data["edits"],
-        )
+        post = await revise_post(current_post, edit_text)
     except Exception as e:
-        logger.error("Generation error: %s", e)
-        await status_msg.edit_text(f"❌ Ошибка генерации: {e}")
+        logger.error("Revision error: %s", e)
+        await status_msg.edit_text(f"❌ Ошибка при правке: {e}")
         return EDITING
 
     context.user_data["current_post"] = post
