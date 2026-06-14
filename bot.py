@@ -261,6 +261,7 @@ async def handle_edit_voice(update: Update, context: ContextTypes.DEFAULT_TYPE) 
 
 @auth_required
 async def handle_edit_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    logger.info("DEBUG handle_edit_text called, user_data keys=%s", list(context.user_data.keys()))
     status_msg = await update.message.reply_text("✍️ Применяю правки...")
     return await _apply_edit(update, context, status_msg, update.message.text)
 
@@ -272,6 +273,7 @@ async def _apply_edit(
     edit_text: str,
 ) -> int:
     current_post = context.user_data.get("current_post", "")
+    logger.info("DEBUG _apply_edit: current_post len=%d, edit_text=%r", len(current_post), edit_text[:80])
 
     try:
         post = await revise_post(current_post, edit_text)
