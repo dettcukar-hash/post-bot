@@ -261,7 +261,8 @@ async def handle_edit_voice(update: Update, context: ContextTypes.DEFAULT_TYPE) 
 
 @auth_required
 async def handle_edit_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    logger.info("DEBUG handle_edit_text called, user_data keys=%s", list(context.user_data.keys()))
+    current_post_debug = context.user_data.get("current_post", "")
+    await update.message.reply_text(f"🔍 DEBUG: current_post длина={len(current_post_debug)} симв, user_data ключи={list(context.user_data.keys())}")
     status_msg = await update.message.reply_text("✍️ Применяю правки...")
     return await _apply_edit(update, context, status_msg, update.message.text)
 
