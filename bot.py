@@ -30,83 +30,32 @@ client = AsyncOpenAI(api_key=OPENAI_API_KEY)
 # Conversation states
 WAITING_INPUT, REVIEWING, EDITING = range(3)
 
-SYSTEM_PROMPT = """Ты пишешь посты для Telegram-канала от имени Михаила Захарова — предпринимателя, владельца завода ROTADO, 19 лет в бизнесе.
+SYSTEM_PROMPT = """Ты — редактор Telegram-канала «Захаров про завод». Пишешь посты от имени Михаила Захарова — предпринимателя, владельца завода ROTADO с 19-летним опытом в управлении и производстве.
 
-═══ КАК НАЧИНАТЬ ПОСТ ═══
+В запросе пользователя будут реальные примеры его постов. Изучи их внимательно: структуру, темп, интонацию, длину, способ открытия, логику изложения. Пиши в точно таком же стиле.
 
-Используй один из пяти типов открытий — выбирай под тему:
+Правила:
+- Возвращай ТОЛЬКО текст поста, без пояснений, заголовков и комментариев
+- Не используй вводные фразы: «Хочу поделиться», «Сегодня поговорим», «Давайте разберём»
+- Короткие абзацы (1–3 предложения) с пустой строкой между ними
+- Конкретные факты: числа, примеры из практики ROTADO
+- При необходимости можно добавить тематический хэштег в конце"""
 
-1. Провокационный тезис:
-«Самая непопулярная функция руководителя — контроль.»
-«Почему воруют в бизнесе.»
 
-2. Личная исповедь:
-«Я сам продукт инфоциганства. Проходил Бизнес Молодость, тренинги...»
-«В бытность менее зрелой компании в ROTADO были вопиющие случаи воровства...»
+def load_style_examples() -> str:
+    """Загружает примеры постов из файла posts.txt рядом с ботом."""
+    posts_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "posts.txt")
+    try:
+        with open(posts_path, "r", encoding="utf-8") as f:
+            content = f.read().strip()
+        logger.info("Loaded style examples from posts.txt (%d chars)", len(content))
+        return content
+    except FileNotFoundError:
+        logger.warning("posts.txt not found — generating without style examples")
+        return ""
 
-3. Крючок со спойлером:
-«Нанимать или растить внутри? Спойлер: быстро не получится ни так, ни так.»
 
-4. Бытовая сцена:
-«В кафе мама с ребёнком обедает, общаются.»
-
-5. Цифра или факт:
-«Видео со мной посмотрел 1,6 млн человек. Население Казани — 1,3 млн.»
-
-НЕ начинай с: «Хочу поделиться», «Сегодня поговорим», «Давайте разберём», «В этом посте».
-
-═══ СТРУКТУРА ═══
-
-Крючок → личный опыт или наблюдение → анализ → практика → вывод.
-
-Иногда добавляй в конце P.S. с вопросами к читателю.
-Иногда строй пост на контрасте: «многие хотят X, но не хотят Y».
-
-═══ ФОРМАТИРОВАНИЕ ═══
-
-Главный приём автора — перечисления без тире, каждый пункт на отдельной строке:
-
-усложняются задачи,
-растёт цена ошибок,
-повышаются требования к ответственности.
-
-Это создаёт ритм. Используй этот приём для желаний, проблем, последствий.
-
-Аналитические списки оформляй с тире:
-- первое
-- второе
-- третье
-
-Открывай смысловые блоки через двоеточие:
-«Что я стал делать:»
-«Почему это происходит:»
-«Что ускоряет рост:»
-
-Абзацы — короткие, 1–3 предложения. Между ними пустая строка.
-
-═══ ЯЗЫК ═══
-
-- Прямой, без канцелярита. Пишет как говорит.
-- «При этом» — для контраста. «По сути» — перед переформулировкой.
-- Конкретные числа и факты из реального опыта ROTADO.
-- Иногда цитата стороннего автора в середине текста.
-- Редко :) или :)) — чтобы смягчить жёсткий вывод.
-- Без хэштегов или 1 тематический в конце (#записки_управленца).
-
-═══ ДЛИНА ═══
-
-Короткое наблюдение или сцена — 200–400 символов.
-Разбор темы — 1000–2500 символов.
-Ориентируйся на глубину темы, не на лимит.
-
-═══ ЧТО НЕЛЬЗЯ ═══
-
-- Никакого Markdown: не используй жирный, курсив.
-- Без вводных фраз-клише.
-- Без общих слов — только конкретика.
-- Не заканчивай призывом «Подписывайтесь» или «Ставьте лайк».
-
-Возвращай ТОЛЬКО текст поста."""
+STYLE_EXAMPLES = load_style_examples()
 
 
 def auth_required(func):
@@ -143,13 +92,23 @@ async def transcribe_voice(file_id: str, context: ContextTypes.DEFAULT_TYPE) -> 
         os.unlink(tmp_path)
 
 
+def _build_examples_block() -> str:
+    """Возвращает блок с примерами постов для вставки в промпт."""
+    if not STYLE_EXAMPLES:
+        return ""
+    return f"\n\nВот реальные примеры постов автора — ориентируйся на этот стиль:\n\n{STYLE_EXAMPLES}\n\n---\n"
+
+
 async def generate_post(transcript: str) -> str:
-    """Генерирует первый черновик поста."""
+    """Генерирует первый черновик поста на основе мысли автора."""
+    examples_block = _build_examples_block()
+    user_content = f"{examples_block}Основная мысль автора:\n{transcript}"
+
     response = await client.chat.completions.create(
         model="gpt-4o",
         messages=[
             {"role": "system", "content": SYSTEM_PROMPT},
-            {"role": "user", "content": f"Основная мысль автора:\n{transcript}"},
+            {"role": "user", "content": user_content},
         ],
         temperature=0.7,
         max_tokens=1500,
@@ -159,12 +118,16 @@ async def generate_post(transcript: str) -> str:
 
 async def revise_post(current_post: str, edit_instruction: str) -> str:
     """Редактирует существующий черновик согласно правкам автора."""
+    examples_block = _build_examples_block()
     user_content = (
+        f"{examples_block}"
         f"Вот текущий черновик поста:\n\n{current_post}\n\n"
         f"Правка автора: {edit_instruction}\n\n"
         f"Отредактируй черновик согласно правке. "
-        f"Не переписывай с нуля — улучши именно этот текст, сохраняя то, что уже хорошо."
+        f"Не переписывай с нуля — улучши именно этот текст, сохраняя то, что уже хорошо. "
+        f"Используй только то, что написано в черновике выше — не добавляй содержание из других источников."
     )
+
     response = await client.chat.completions.create(
         model="gpt-4o",
         messages=[
@@ -239,6 +202,7 @@ async def handle_initial_voice(update: Update, context: ContextTypes.DEFAULT_TYP
 async def handle_initial_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     transcript = update.message.text
     context.user_data["transcript"] = transcript
+
     status_msg = await update.message.reply_text("✍️ Генерирую пост...")
 
     try:
@@ -287,7 +251,7 @@ async def handle_edit_voice(update: Update, context: ContextTypes.DEFAULT_TYPE) 
         await status_msg.edit_text(f"❌ Ошибка транскрипции: {e}")
         return EDITING
 
-    await status_msg.edit_text(f"🎙 Правки: {edit_text}\n\n✍️ Применяю...")
+    await status_msg.edit_text(f"🎙 Правки: {edit_text}\n\n✍️ Применяю правки...")
     return await _apply_edit(update, context, status_msg, edit_text)
 
 
@@ -297,14 +261,19 @@ async def handle_edit_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -
     return await _apply_edit(update, context, status_msg, update.message.text)
 
 
-async def _apply_edit(update: Update, context: ContextTypes.DEFAULT_TYPE, status_msg, edit_text: str) -> int:
+async def _apply_edit(
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE,
+    status_msg,
+    edit_text: str,
+) -> int:
     current_post = context.user_data.get("current_post", "")
 
     try:
         post = await revise_post(current_post, edit_text)
     except Exception as e:
-        logger.error("Revision error: %s", e)
-        await status_msg.edit_text(f"❌ Ошибка при правке: {e}")
+        logger.error("Generation error: %s", e)
+        await status_msg.edit_text(f"❌ Ошибка генерации: {e}")
         return EDITING
 
     context.user_data["current_post"] = post
