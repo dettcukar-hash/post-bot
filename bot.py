@@ -261,8 +261,6 @@ async def handle_edit_voice(update: Update, context: ContextTypes.DEFAULT_TYPE) 
 
 @auth_required
 async def handle_edit_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    current_post_debug = context.user_data.get("current_post", "")
-    await update.message.reply_text(f"🔍 DEBUG: current_post длина={len(current_post_debug)} симв, user_data ключи={list(context.user_data.keys())}")
     status_msg = await update.message.reply_text("✍️ Применяю правки...")
     return await _apply_edit(update, context, status_msg, update.message.text)
 
@@ -274,7 +272,6 @@ async def _apply_edit(
     edit_text: str,
 ) -> int:
     current_post = context.user_data.get("current_post", "")
-    logger.info("DEBUG _apply_edit: current_post len=%d, edit_text=%r", len(current_post), edit_text[:80])
 
     try:
         post = await revise_post(current_post, edit_text)
@@ -326,7 +323,7 @@ def main() -> None:
         },
         fallbacks=[CommandHandler("cancel", cmd_cancel)],
         per_user=True,
-        allow_reentry=True,
+        allow_reentry=False,
     )
 
     app.add_handler(conv_handler)
