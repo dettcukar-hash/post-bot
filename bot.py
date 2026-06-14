@@ -295,6 +295,10 @@ async def cmd_cancel(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     return ConversationHandler.END
 
 
+# ──────────────────────────────────────────────
+# Main
+# ──────────────────────────────────────────────
+
 def main() -> None:
     app = Application.builder().token(TELEGRAM_TOKEN).build()
 
