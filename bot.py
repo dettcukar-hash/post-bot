@@ -125,14 +125,11 @@ async def generate_post(transcript: str) -> str:
 
 async def revise_post(current_post: str, edit_instruction: str) -> str:
     """Редактирует существующий черновик согласно правкам автора."""
-    examples_block = _build_examples_block()
     user_content = (
-        f"Вот текущий черновик поста:\n\n{current_post}\n\n"
-        f"ПРАВКА: {edit_instruction}\n\n"
-        f"Отредактируй черновик согласно правке. "
-        f"Не переписывай с нуля — улучши именно этот текст, сохраняя тему и то, что уже хорошо. "
-        f"Используй только содержание из черновика выше — не добавляй темы из других источников."
-        f"{examples_block}"
+        f"Вот черновик поста:\n\n{current_post}\n\n"
+        f"Правка: {edit_instruction}\n\n"
+        f"Внеси правку в черновик. Сохрани тему, структуру и всё, что уже хорошо. "
+        f"Верни только исправленный текст поста, без комментариев."
     )
 
     response = await client.chat.completions.create(
